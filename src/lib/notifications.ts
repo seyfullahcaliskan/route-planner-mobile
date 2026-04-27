@@ -14,7 +14,6 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotificationsAsync(userId?: string) {
-    // Expo Go koruması
     if (Constants.appOwnership === 'expo') {
         console.log('Expo Go detected, push registration skipped.');
         return null;

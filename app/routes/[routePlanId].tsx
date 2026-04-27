@@ -7,7 +7,7 @@ import { radius, shadows, spacing, typography } from '@/src/theme';
 import { getStatusColor } from '@/src/utils/status';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
@@ -17,6 +17,7 @@ import {
     Text,
     View,
 } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
     deliverStop,
@@ -26,6 +27,31 @@ import {
     reoptimizeRoute,
     skipStop,
 } from '../../src/api/routeService';
+
+type RouteStopItem = {
+    id: string;
+    externalReference?: string;
+    customerName?: string;
+    customerPhone?: string;
+    rawAddress: string;
+    normalizedAddress?: string;
+    latitude?: number;
+    longitude?: number;
+    sequenceNo: number;
+    previousSequenceNo?: number;
+    optimizationRound: number;
+    priorityNo: number;
+    deliveryNote?: string;
+    stopStatus:
+    | 'PENDING'
+    | 'NAVIGATING'
+    | 'ARRIVED'
+    | 'DELIVERED'
+    | 'FAILED'
+    | 'SKIPPED'
+    | 'POSTPONED';
+    navigationUrl?: string;
+};
 
 const getStopStatusLabel = (status: string) => {
     switch (status) {
@@ -55,7 +81,12 @@ export default function RouteDetailScreen() {
     const { largeTouchMode } = useSettingsStore();
     const styles = createStyles(colors, isDark, largeTouchMode);
 
-    const { data, isLoading, error } = useQuery({
+    const listRef = useRef<FlatList<RouteStopItem>>(null);
+    const mapRef = useRef<MapView | null>(null);
+
+    const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
+
+    const { data, isLoading, error } = useQuery<RouteStopItem[]>({
         queryKey: ['routeStops', routePlanId],
         queryFn: () => getRouteStops(routePlanId!),
         enabled: !!routePlanId,
@@ -107,6 +138,14 @@ export default function RouteDetailScreen() {
         );
     }, [stops]);
 
+    const selectedStop = useMemo(() => {
+        if (selectedStopId) {
+            const found = stops.find((item) => item.id === selectedStopId);
+            if (found) return found;
+        }
+        return currentStop;
+    }, [selectedStopId, stops, currentStop]);
+
     const completedCount = useMemo(
         () => stops.filter((item) => item.stopStatus === 'DELIVERED').length,
         [stops]
@@ -131,6 +170,116 @@ export default function RouteDetailScreen() {
             ).length,
         [stops]
     );
+
+    const coordinateStops = useMemo(
+        () =>
+            [...stops]
+                .filter(
+                    (item) =>
+                        item.latitude !== undefined &&
+                        item.latitude !== null &&
+                        item.longitude !== undefined &&
+                        item.longitude !== null
+                )
+                .sort((a, b) => a.sequenceNo - b.sequenceNo),
+        [stops]
+    );
+
+    const polylineCoordinates = useMemo(
+        () =>
+            coordinateStops.map((item) => ({
+                latitude: Number(item.latitude),
+                longitude: Number(item.longitude),
+            })),
+        [coordinateStops]
+    );
+
+    useEffect(() => {
+        if (!selectedStopId && currentStop?.id) {
+            setSelectedStopId(currentStop.id);
+        }
+    }, [selectedStopId, currentStop]);
+
+    useEffect(() => {
+        if (!currentStop?.id) return;
+
+        setSelectedStopId((prev) => {
+            if (!prev) return currentStop.id;
+
+            const prevStillExists = stops.some((item) => item.id === prev);
+            if (!prevStillExists) return currentStop.id;
+
+            const prevStop = stops.find((item) => item.id === prev);
+            const prevIsTerminal =
+                prevStop?.stopStatus === 'DELIVERED' ||
+                prevStop?.stopStatus === 'FAILED' ||
+                prevStop?.stopStatus === 'SKIPPED';
+
+            return prevIsTerminal ? currentStop.id : prev;
+        });
+    }, [currentStop, stops]);
+
+    useEffect(() => {
+        if (!mapRef.current || polylineCoordinates.length === 0) return;
+
+        const timeout = setTimeout(() => {
+            if (polylineCoordinates.length === 1) {
+                mapRef.current?.animateToRegion(
+                    {
+                        latitude: polylineCoordinates[0].latitude,
+                        longitude: polylineCoordinates[0].longitude,
+                        latitudeDelta: 0.04,
+                        longitudeDelta: 0.04,
+                    },
+                    500
+                );
+            } else {
+                mapRef.current?.fitToCoordinates(polylineCoordinates, {
+                    edgePadding: {
+                        top: 80,
+                        right: 50,
+                        bottom: 240,
+                        left: 50,
+                    },
+                    animated: true,
+                });
+            }
+        }, 300);
+
+        return () => clearTimeout(timeout);
+    }, [polylineCoordinates]);
+
+    const scrollToStop = (stopId: string) => {
+        const index = stops.findIndex((item) => item.id === stopId);
+        if (index === -1) return;
+
+        listRef.current?.scrollToIndex({
+            index,
+            animated: true,
+            viewPosition: 0.3,
+        });
+    };
+
+    const focusMapToStop = (stopId: string) => {
+        const stop = stops.find((item) => item.id === stopId);
+        if (!stop?.latitude || !stop?.longitude || !mapRef.current) return;
+
+        mapRef.current.animateToRegion(
+            {
+                latitude: Number(stop.latitude),
+                longitude: Number(stop.longitude),
+                latitudeDelta: 0.04,
+                longitudeDelta: 0.04,
+            },
+            500
+        );
+    };
+
+    const handleSelectStop = (stopId: string) => {
+        setSelectedStopId(stopId);
+        scrollToStop(stopId);
+        focusMapToStop(stopId);
+    };
 
     const isAnyPending =
         deliverMutation.isPending ||
@@ -161,169 +310,333 @@ export default function RouteDetailScreen() {
     return (
         <SafeAreaView edges={['top']} style={styles.container}>
             <FlatList
+                ref={listRef}
                 data={stops}
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.contentContainer}
+                stickyHeaderIndices={selectedStop ? [1] : undefined}
+                onScrollToIndexFailed={(info) => {
+                    setTimeout(() => {
+                        listRef.current?.scrollToIndex({
+                            index: info.index,
+                            animated: true,
+                            viewPosition: 0.3,
+                        });
+                    }, 250);
+                }}
                 ListHeaderComponent={
-                    <View style={styles.headerArea}>
-                        <AppCard style={styles.heroCard}>
-                            <View style={styles.heroTopRow}>
-                                <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={styles.heroEyebrow}>Rota Detayı</Text>
-                                    <Text style={styles.heroTitle}>Bugünkü Duraklar</Text>
-                                    <Text style={styles.heroSubTitle} numberOfLines={1}>
-                                        Sıradaki: {currentStop?.customerName || 'Aktif durak yok'}
-                                    </Text>
+                    <>
+                        <View style={styles.headerArea}>
+                            <AppCard style={styles.heroCard}>
+                                <View style={styles.heroTopRow}>
+                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                        <Text style={styles.heroEyebrow}>Rota Detayı</Text>
+                                        <Text style={styles.heroTitle}>Bugünkü Duraklar</Text>
+                                        <Text style={styles.heroSubTitle} numberOfLines={1}>
+                                            Sıradaki: {currentStop?.customerName || 'Aktif durak yok'}
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.countPill}>
+                                        <Text style={styles.countPillText}>{stops.length}</Text>
+                                    </View>
                                 </View>
 
-                                <View style={styles.countPill}>
-                                    <Text style={styles.countPillText}>{stops.length}</Text>
+                                <View style={styles.heroDivider} />
+
+                                <View style={styles.heroStatsRow}>
+                                    <View style={styles.heroStatBox}>
+                                        <Text style={styles.heroStatLabel}>Toplam</Text>
+                                        <Text style={styles.heroStatValue}>{stops.length}</Text>
+                                    </View>
+
+                                    <View style={styles.heroStatBox}>
+                                        <Text style={styles.heroStatLabel}>Bekleyen</Text>
+                                        <Text style={styles.heroStatValue}>{pendingCount}</Text>
+                                    </View>
+
+                                    <View style={styles.heroStatBox}>
+                                        <Text style={styles.heroStatLabel}>Teslim</Text>
+                                        <Text style={styles.heroStatValue}>{completedCount}</Text>
+                                    </View>
+
+                                    <View style={styles.heroStatBox}>
+                                        <Text style={styles.heroStatLabel}>Sorunlu</Text>
+                                        <Text style={styles.heroStatValue}>{failedCount}</Text>
+                                    </View>
                                 </View>
-                            </View>
+                            </AppCard>
 
-                            <View style={styles.heroDivider} />
+                            <PrimaryButton
+                                title={
+                                    reoptimizeMutation.isPending
+                                        ? 'Rota Güncelleniyor...'
+                                        : 'Yeniden Rota Oluştur'
+                                }
+                                onPress={() => reoptimizeMutation.mutate()}
+                                disabled={reoptimizeMutation.isPending}
+                            />
 
-                            <View style={styles.heroStatsRow}>
-                                <View style={styles.heroStatBox}>
-                                    <Text style={styles.heroStatLabel}>Toplam</Text>
-                                    <Text style={styles.heroStatValue}>{stops.length}</Text>
-                                </View>
+                            {coordinateStops.length > 0 ? (
+                                <AppCard style={styles.mapCard}>
+                                    <View style={styles.mapHeaderRow}>
+                                        <Text style={styles.mapTitle}>Harita</Text>
 
-                                <View style={styles.heroStatBox}>
-                                    <Text style={styles.heroStatLabel}>Bekleyen</Text>
-                                    <Text style={styles.heroStatValue}>{pendingCount}</Text>
-                                </View>
-
-                                <View style={styles.heroStatBox}>
-                                    <Text style={styles.heroStatLabel}>Teslim</Text>
-                                    <Text style={styles.heroStatValue}>{completedCount}</Text>
-                                </View>
-
-                                <View style={styles.heroStatBox}>
-                                    <Text style={styles.heroStatLabel}>Sorunlu</Text>
-                                    <Text style={styles.heroStatValue}>{failedCount}</Text>
-                                </View>
-                            </View>
-                        </AppCard>
-
-                        <PrimaryButton
-                            title={reoptimizeMutation.isPending ? 'Rota Güncelleniyor...' : 'Yeniden Rota Oluştur'}
-                            onPress={() => reoptimizeMutation.mutate()}
-                            disabled={reoptimizeMutation.isPending}
-                        />
-                    </View>
-                }
-                renderItem={({ item }) => {
-                    const isCurrent = currentStop?.id === item.id;
-                    const localizedStatus = getStopStatusLabel(item.stopStatus);
-
-                    return (
-                        <AppCard style={[styles.stopCard, isCurrent && styles.stopCardCurrent]}>
-                            <View style={styles.stopHeader}>
-                                <View style={[styles.sequenceBadge, isCurrent && styles.sequenceBadgeCurrent]}>
-                                    <Text
-                                        style={[
-                                            styles.sequenceBadgeText,
-                                            isCurrent && styles.sequenceBadgeTextCurrent,
-                                        ]}
-                                    >
-                                        {item.sequenceNo}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.stopMainInfo}>
-                                    <Text style={styles.customerName} numberOfLines={1}>
-                                        {item.customerName || 'Müşteri'}
-                                    </Text>
-
-                                    <View style={styles.metaRow}>
-                                        <StatusPill
-                                            label={localizedStatus}
-                                            color={getStatusColor(item.stopStatus) || colors.textSecondary}
-                                            backgroundColor={colors.cardSoft}
-                                        />
-
-                                        {isCurrent ? (
+                                        {selectedStop ? (
                                             <StatusPill
-                                                label="Aktif Durak"
+                                                label={`#${selectedStop.sequenceNo}`}
                                                 color={colors.primary}
                                                 backgroundColor={colors.primarySoft}
                                             />
                                         ) : null}
                                     </View>
-                                </View>
-                            </View>
 
-                            <View style={styles.addressBox}>
-                                <Text style={styles.addressLabel}>Adres</Text>
-                                <Text style={styles.addressText}>{item.rawAddress}</Text>
-                            </View>
+                                    <View style={styles.mapWrapper}>
+                                        <MapView
+                                            ref={mapRef}
+                                            style={styles.map}
+                                            initialRegion={{
+                                                latitude: Number(
+                                                    selectedStop?.latitude ??
+                                                    currentStop?.latitude ??
+                                                    coordinateStops[0]?.latitude ??
+                                                    41.2061
+                                                ),
+                                                longitude: Number(
+                                                    selectedStop?.longitude ??
+                                                    currentStop?.longitude ??
+                                                    coordinateStops[0]?.longitude ??
+                                                    32.6204
+                                                ),
+                                                latitudeDelta: 0.12,
+                                                longitudeDelta: 0.12,
+                                            }}
+                                        >
+                                            {polylineCoordinates.length >= 2 ? (
+                                                <Polyline
+                                                    coordinates={polylineCoordinates}
+                                                    strokeColor={colors.primary}
+                                                    strokeWidth={4}
+                                                />
+                                            ) : null}
 
-                            {item.deliveryNote ? (
-                                <View style={styles.noteBox}>
-                                    <Text style={styles.noteLabel}>Not</Text>
-                                    <Text style={styles.noteText}>{item.deliveryNote}</Text>
-                                </View>
+                                            {coordinateStops.map((item) => {
+                                                const isCurrent = currentStop?.id === item.id;
+                                                const isSelected = selectedStop?.id === item.id;
+
+                                                return (
+                                                    <Marker
+                                                        key={item.id}
+                                                        coordinate={{
+                                                            latitude: Number(item.latitude),
+                                                            longitude: Number(item.longitude),
+                                                        }}
+                                                        title={item.customerName || `Durak ${item.sequenceNo}`}
+                                                        description={item.rawAddress}
+                                                        pinColor={
+                                                            isSelected
+                                                                ? colors.primary
+                                                                : isCurrent
+                                                                    ? colors.success
+                                                                    : undefined
+                                                        }
+                                                        onPress={() => handleSelectStop(item.id)}
+                                                    />
+                                                );
+                                            })}
+                                        </MapView>
+                                    </View>
+                                </AppCard>
                             ) : null}
+                        </View>
 
-                            <Pressable
-                                onPress={() => openNavigation(item.id)}
-                                style={({ pressed }) => [
-                                    styles.navigationButton,
-                                    pressed && styles.pressed,
+                        {selectedStop ? (
+                            <View style={styles.stickyWrap}>
+                                <View style={styles.stickyCard}>
+                                    <View style={styles.stickyTop}>
+                                        <View style={styles.stickyLeft}>
+                                            <Text style={styles.stickyTitle} numberOfLines={1}>
+                                                {selectedStop.customerName ||
+                                                    `Durak ${selectedStop.sequenceNo}`}
+                                            </Text>
+                                            <Text style={styles.stickyAddress} numberOfLines={2}>
+                                                {selectedStop.rawAddress}
+                                            </Text>
+                                        </View>
+
+                                        <StatusPill
+                                            label={getStopStatusLabel(selectedStop.stopStatus)}
+                                            color={
+                                                getStatusColor(selectedStop.stopStatus) ||
+                                                colors.textSecondary
+                                            }
+                                            backgroundColor={colors.cardSoft}
+                                        />
+                                    </View>
+
+                                    <View style={styles.stickyActions}>
+                                        <Pressable
+                                            onPress={() => openNavigation(selectedStop.id)}
+                                            style={({ pressed }) => [
+                                                styles.overlayPrimaryButton,
+                                                pressed && styles.pressed,
+                                            ]}
+                                        >
+                                            <Text style={styles.overlayPrimaryButtonText}>
+                                                Navigasyon
+                                            </Text>
+                                        </Pressable>
+
+                                        <Pressable
+                                            onPress={() => {
+                                                if (currentStop?.id) {
+                                                    handleSelectStop(currentStop.id);
+                                                }
+                                            }}
+                                            style={({ pressed }) => [
+                                                styles.overlaySecondaryButton,
+                                                pressed && styles.pressed,
+                                            ]}
+                                        >
+                                            <Text style={styles.overlaySecondaryButtonText}>
+                                                Aktif Durağa Dön
+                                            </Text>
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            </View>
+                        ) : null}
+                    </>
+                }
+                renderItem={({ item }) => {
+                    const isCurrent = currentStop?.id === item.id;
+                    const isSelected = selectedStop?.id === item.id;
+                    const localizedStatus = getStopStatusLabel(item.stopStatus);
+
+                    return (
+                        <Pressable onPress={() => handleSelectStop(item.id)}>
+                            <AppCard
+                                style={[
+                                    styles.stopCard,
+                                    isCurrent && styles.stopCardCurrent,
+                                    isSelected && styles.stopCardSelected,
                                 ]}
                             >
-                                <Text style={styles.navigationButtonText}>Navigasyonu Aç</Text>
-                            </Pressable>
+                                <View style={styles.stopHeader}>
+                                    <View
+                                        style={[
+                                            styles.sequenceBadge,
+                                            isCurrent && styles.sequenceBadgeCurrent,
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.sequenceBadgeText,
+                                                isCurrent && styles.sequenceBadgeTextCurrent,
+                                            ]}
+                                        >
+                                            {item.sequenceNo}
+                                        </Text>
+                                    </View>
 
-                            <View style={styles.actionsGrid}>
+                                    <View style={styles.stopMainInfo}>
+                                        <Text style={styles.customerName} numberOfLines={1}>
+                                            {item.customerName || 'Müşteri'}
+                                        </Text>
+
+                                        <View style={styles.metaRow}>
+                                            <StatusPill
+                                                label={localizedStatus}
+                                                color={
+                                                    getStatusColor(item.stopStatus) || colors.textSecondary
+                                                }
+                                                backgroundColor={colors.cardSoft}
+                                            />
+
+                                            {isCurrent ? (
+                                                <StatusPill
+                                                    label="Aktif Durak"
+                                                    color={colors.primary}
+                                                    backgroundColor={colors.primarySoft}
+                                                />
+                                            ) : null}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                <View style={styles.addressBox}>
+                                    <Text style={styles.addressLabel}>Adres</Text>
+                                    <Text style={styles.addressText}>{item.rawAddress}</Text>
+                                </View>
+
+                                {item.deliveryNote ? (
+                                    <View style={styles.noteBox}>
+                                        <Text style={styles.noteLabel}>Not</Text>
+                                        <Text style={styles.noteText}>{item.deliveryNote}</Text>
+                                    </View>
+                                ) : null}
+
                                 <Pressable
-                                    onPress={() => deliverMutation.mutate(item.id)}
-                                    disabled={isAnyPending}
+                                    onPress={() => openNavigation(item.id)}
                                     style={({ pressed }) => [
-                                        styles.actionButton,
-                                        styles.successButton,
+                                        styles.navigationButton,
                                         pressed && styles.pressed,
-                                        isAnyPending && styles.disabled,
                                     ]}
                                 >
-                                    <Text style={styles.actionButtonText}>Teslim</Text>
+                                    <Text style={styles.navigationButtonText}>Navigasyonu Aç</Text>
                                 </Pressable>
 
-                                <Pressable
-                                    onPress={() => skipMutation.mutate(item.id)}
-                                    disabled={isAnyPending}
-                                    style={({ pressed }) => [
-                                        styles.actionButton,
-                                        styles.warningButton,
-                                        pressed && styles.pressed,
-                                        isAnyPending && styles.disabled,
-                                    ]}
-                                >
-                                    <Text style={styles.actionButtonText}>Atla</Text>
-                                </Pressable>
+                                <View style={styles.actionsGrid}>
+                                    <Pressable
+                                        onPress={() => deliverMutation.mutate(item.id)}
+                                        disabled={isAnyPending}
+                                        style={({ pressed }) => [
+                                            styles.actionButton,
+                                            styles.successButton,
+                                            pressed && styles.pressed,
+                                            isAnyPending && styles.disabled,
+                                        ]}
+                                    >
+                                        <Text style={styles.actionButtonText}>Teslim</Text>
+                                    </Pressable>
 
-                                <Pressable
-                                    onPress={() => failMutation.mutate(item.id)}
-                                    disabled={isAnyPending}
-                                    style={({ pressed }) => [
-                                        styles.actionButton,
-                                        styles.dangerButton,
-                                        pressed && styles.pressed,
-                                        isAnyPending && styles.disabled,
-                                    ]}
-                                >
-                                    <Text style={styles.actionButtonText}>Başarısız</Text>
-                                </Pressable>
-                            </View>
-                        </AppCard>
+                                    <Pressable
+                                        onPress={() => skipMutation.mutate(item.id)}
+                                        disabled={isAnyPending}
+                                        style={({ pressed }) => [
+                                            styles.actionButton,
+                                            styles.warningButton,
+                                            pressed && styles.pressed,
+                                            isAnyPending && styles.disabled,
+                                        ]}
+                                    >
+                                        <Text style={styles.actionButtonText}>Atla</Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        onPress={() => failMutation.mutate(item.id)}
+                                        disabled={isAnyPending}
+                                        style={({ pressed }) => [
+                                            styles.actionButton,
+                                            styles.dangerButton,
+                                            pressed && styles.pressed,
+                                            isAnyPending && styles.disabled,
+                                        ]}
+                                    >
+                                        <Text style={styles.actionButtonText}>Başarısız</Text>
+                                    </Pressable>
+                                </View>
+                            </AppCard>
+                        </Pressable>
                     );
                 }}
                 ListEmptyComponent={
                     <AppCard style={styles.emptyCard}>
                         <Text style={styles.emptyTitle}>Durak bulunamadı</Text>
-                        <Text style={styles.emptyDescription}>Bu rotada henüz durak yok.</Text>
+                        <Text style={styles.emptyDescription}>
+                            Bu rotada henüz durak yok.
+                        </Text>
                     </AppCard>
                 }
             />
@@ -440,6 +753,92 @@ const createStyles = (
             color: colors.text,
             fontSize: largeTouchMode ? 20 : 18,
         },
+        mapHeaderRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: spacing.sm,
+        },
+        mapTitle: {
+            ...typography.heading,
+            color: colors.text,
+        },
+        mapWrapper: {
+            position: 'relative',
+        },
+        mapCard: {
+            marginBottom: spacing.md,
+            overflow: 'hidden',
+        },
+        map: {
+            width: '100%',
+            height: largeTouchMode ? 300 : 240,
+            borderRadius: radius.lg,
+        },
+        stickyWrap: {
+            backgroundColor: colors.page,
+            paddingBottom: spacing.md,
+        },
+        stickyCard: {
+            backgroundColor: colors.card,
+            borderRadius: radius.xl,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: spacing.md,
+            ...shadows.card,
+        },
+        stickyTop: {
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: spacing.sm,
+            marginBottom: spacing.md,
+        },
+        stickyLeft: {
+            flex: 1,
+            minWidth: 0,
+        },
+        stickyTitle: {
+            ...typography.body,
+            color: colors.text,
+            fontWeight: '700',
+            marginBottom: 4,
+        },
+        stickyAddress: {
+            ...typography.bodySmall,
+            color: colors.textSecondary,
+            lineHeight: 18,
+        },
+        stickyActions: {
+            flexDirection: 'row',
+            gap: spacing.sm,
+        },
+        overlayPrimaryButton: {
+            flex: 1,
+            minHeight: largeTouchMode ? 52 : 44,
+            borderRadius: radius.md,
+            backgroundColor: colors.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        overlayPrimaryButtonText: {
+            color: colors.white,
+            fontSize: 13,
+            fontWeight: '700',
+        },
+        overlaySecondaryButton: {
+            flex: 1,
+            minHeight: largeTouchMode ? 52 : 44,
+            borderRadius: radius.md,
+            backgroundColor: colors.cardSoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        overlaySecondaryButtonText: {
+            color: colors.text,
+            fontSize: 13,
+            fontWeight: '700',
+        },
         stopCard: {
             marginBottom: spacing.md,
             borderColor: colors.border,
@@ -449,6 +848,11 @@ const createStyles = (
         stopCardCurrent: {
             borderColor: colors.primarySoft,
             backgroundColor: isDark ? colors.card : '#FAFCFF',
+        },
+        stopCardSelected: {
+            borderColor: colors.primary,
+            borderWidth: 1.5,
+            backgroundColor: isDark ? colors.card : '#F7FBFF',
         },
         stopHeader: {
             flexDirection: 'row',
