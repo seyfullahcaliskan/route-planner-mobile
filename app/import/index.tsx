@@ -10,7 +10,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ImportHomeScreen() {
   const { colors } = useAppTheme();
-  const { title, description, setTitle, setDescription, stops, clearAll } = useRouteImportStore();
+  const {
+    title,
+    description,
+    setTitle,
+    setDescription,
+    stops,
+    clearAll,
+    startAddress,
+    endAddress,
+    setStartAddress,
+    setEndAddress,
+  } = useRouteImportStore();
   const styles = createStyles(colors);
 
   return (
@@ -50,6 +61,23 @@ export default function ImportHomeScreen() {
         <AppCard>
           <Text style={styles.sectionTitle}>Adres Girişi</Text>
           <Text style={styles.helperText}>Toplam eklenen adres: {stops.length}</Text>
+          <Text style={styles.label}>Başlangıç Adresi</Text>
+          <TextInput
+            value={startAddress}
+            onChangeText={setStartAddress}
+            placeholder="Örn: Karabük Merkez"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Bitiş Adresi</Text>
+          <TextInput
+            value={endAddress}
+            onChangeText={setEndAddress}
+            placeholder="Örn: Karabük Merkez"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+          />
           <PrimaryButton
             title="CSV Dosyası Yükle"
             onPress={() =>
@@ -84,7 +112,11 @@ export default function ImportHomeScreen() {
                   pathname: '/import/preview',
                 })
               }
-              disabled={!title.trim() || stops.length === 0}
+              disabled={
+                !title.trim() ||
+                stops.length === 0 ||
+                !startAddress.trim()
+              }
             />
           </View>
         </AppCard>
