@@ -4,9 +4,10 @@ import { useAppTheme } from '@/src/hooks/useAppTheme';
 import { useRouteImportStore } from '@/src/store/useRouteImportStore';
 import { spacing, typography } from '@/src/theme';
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { usePlaceStore } from '../../src/store/usePlaceStore';
 
 export default function ImportHomeScreen() {
   const { colors } = useAppTheme();
@@ -22,7 +23,15 @@ export default function ImportHomeScreen() {
     setStartAddress,
     setEndAddress,
   } = useRouteImportStore();
+
   const styles = createStyles(colors);
+  const { selectedPlace } = usePlaceStore();
+
+  useEffect(() => {
+    if (selectedPlace) {
+      setStartAddress(selectedPlace.address);
+    }
+  }, [selectedPlace]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -62,6 +71,13 @@ export default function ImportHomeScreen() {
           <Text style={styles.sectionTitle}>Adres Girişi</Text>
           <Text style={styles.helperText}>Toplam eklenen adres: {stops.length}</Text>
           <Text style={styles.label}>Başlangıç Adresi</Text>
+          <Pressable
+            onPress={() => router.push('/places')}
+            style={{ padding: 12, borderWidth: 1 }}
+          >
+            <Text>Başlangıç Seç</Text>
+          </Pressable>
+
           <TextInput
             value={startAddress}
             onChangeText={setStartAddress}
