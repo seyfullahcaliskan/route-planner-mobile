@@ -1,7 +1,11 @@
+// app/(tabs)/index.tsx
+import { getUserRoutes } from '@/src/api/routeService';
 import AppCard from '@/src/components/AppCard';
 import PrimaryButton from '@/src/components/PrimaryButton';
 import StatusPill from '@/src/components/StatusPill';
 import { useAppTheme } from '@/src/hooks/useAppTheme';
+import { useTranslation } from '@/src/hooks/useTranslation';
+import { useAuthStore } from '@/src/store/useAuthStore';
 import { useSettingsStore } from '@/src/store/useSettingsStore';
 import { radius, spacing, typography } from '@/src/theme';
 import { useQuery } from '@tanstack/react-query';
@@ -9,23 +13,25 @@ import { router } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getUserRoutes } from '../../src/api/routeService';
 
 export default function HomeScreen() {
   const { colors } = useAppTheme();
+  const { t } = useTranslation();
   const { largeTouchMode } = useSettingsStore();
+  const userId = useAuthStore((s) => s.user?.id);
   const styles = createStyles(colors, largeTouchMode);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['userRoutes'],
+    queryKey: ['userRoutes', userId],
     queryFn: getUserRoutes,
+    enabled: !!userId,
   });
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.helperText}>Rotalar yükleniyor...</Text>
+        <Text style={styles.helperText}>{t('home.loadingRoutes')}</Text>
       </SafeAreaView>
     );
   }
@@ -34,8 +40,8 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.centered}>
         <AppCard style={styles.feedbackCard}>
-          <Text style={styles.feedbackTitle}>Bir sorun oluştu</Text>
-          <Text style={styles.feedbackDescription}>Rotalar alınamadı.</Text>
+          <Text style={styles.feedbackTitle}>{t('home.errorTitle')}</Text>
+          <Text style={styles.feedbackDescription}>{t('home.errorSubtitle')}</Text>
         </AppCard>
       </SafeAreaView>
     );
@@ -43,11 +49,8 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={{ marginTop: spacing.md }}>
-        <PrimaryButton
-          title="Yeni Rota Oluştur"
-          onPress={() => router.push('/import')}
-        />
+      <View style={{ marginTop: spacing.md, paddingHorizontal: spacing.lg }}>
+        <PrimaryButton title={t('home.newRoute')} onPress={() => router.push('/import')} />
       </View>
       <FlatList
         data={data ?? []}
@@ -56,10 +59,9 @@ export default function HomeScreen() {
         contentContainerStyle={styles.contentContainer}
         ListHeaderComponent={
           <View style={styles.headerArea}>
-            <Text style={styles.title}>Rotalar</Text>
-            <Text style={styles.subtitle}>Bugünkü ve kayıtlı rota planların</Text>
+            <Text style={styles.title}>{t('home.title')}</Text>
+            <Text style={styles.subtitle}>{t('home.subtitle')}</Text>
           </View>
-          
         }
         renderItem={({ item }) => (
           <Pressable
@@ -77,30 +79,26 @@ export default function HomeScreen() {
                     {item.title}
                   </Text>
                   <Text style={styles.routeDescription} numberOfLines={2}>
-                    {item.description || 'Açıklama yok'}
+                    {item.description || ''}
                   </Text>
                 </View>
-
                 <StatusPill
                   label={item.planStatus}
                   color={colors.primary}
                   backgroundColor={colors.primarySoft}
                 />
               </View>
-
               <View style={styles.statsRow}>
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>Durak</Text>
+                  <Text style={styles.statLabel}>{t('route.stops')}</Text>
                   <Text style={styles.statValue}>{item.totalStopCount}</Text>
                 </View>
-
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>Tamamlanan</Text>
+                  <Text style={styles.statLabel}>{t('route.completed')}</Text>
                   <Text style={styles.statValue}>{item.completedStopCount}</Text>
                 </View>
-
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>Başarısız</Text>
+                  <Text style={styles.statLabel}>{t('route.failed')}</Text>
                   <Text style={styles.statValue}>{item.failedStopCount}</Text>
                 </View>
               </View>
@@ -109,10 +107,8 @@ export default function HomeScreen() {
         )}
         ListEmptyComponent={
           <AppCard style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>Henüz rota yok</Text>
-            <Text style={styles.emptyDescription}>
-              Adres girip rota oluşturduğunda burada görünecek.
-            </Text>
+            <Text style={styles.emptyTitle}>{t('home.emptyTitle')}</Text>
+            <Text style={styles.emptyDescription}>{t('home.emptySubtitle')}</Text>
           </AppCard>
         }
       />
@@ -120,19 +116,10 @@ export default function HomeScreen() {
   );
 }
 
-const createStyles = (
-  colors: ReturnType<typeof useAppTheme>['colors'],
-  largeTouchMode: boolean
-) =>
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors'], largeTouchMode: boolean) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.page,
-    },
-    contentContainer: {
-      padding: spacing.lg,
-      paddingBottom: spacing.xxxl,
-    },
+    container: { flex: 1, backgroundColor: colors.page },
+    contentContainer: { padding: spacing.lg, paddingBottom: spacing.xxxl },
     centered: {
       flex: 1,
       backgroundColor: colors.page,
@@ -140,41 +127,15 @@ const createStyles = (
       alignItems: 'center',
       padding: spacing.lg,
     },
-    helperText: {
-      marginTop: spacing.md,
-      ...typography.body,
-      color: colors.textSecondary,
-    },
-    feedbackCard: {
-      width: '100%',
-    },
-    feedbackTitle: {
-      ...typography.heading,
-      color: colors.text,
-      marginBottom: spacing.xs,
-    },
-    feedbackDescription: {
-      ...typography.body,
-      color: colors.textSecondary,
-    },
-    headerArea: {
-      marginBottom: spacing.lg,
-    },
-    title: {
-      ...typography.titleLarge,
-      color: colors.text,
-      marginBottom: spacing.xs,
-    },
-    subtitle: {
-      ...typography.body,
-      color: colors.textSecondary,
-    },
-    routeCard: {
-      marginBottom: spacing.md,
-    },
-    routeCardLarge: {
-      padding: 20,
-    },
+    helperText: { marginTop: spacing.md, ...typography.body, color: colors.textSecondary },
+    feedbackCard: { width: '100%' },
+    feedbackTitle: { ...typography.heading, color: colors.text, marginBottom: spacing.xs },
+    feedbackDescription: { ...typography.body, color: colors.textSecondary },
+    headerArea: { marginBottom: spacing.lg },
+    title: { ...typography.titleLarge, color: colors.text, marginBottom: spacing.xs },
+    subtitle: { ...typography.body, color: colors.textSecondary },
+    routeCard: { marginBottom: spacing.md },
+    routeCardLarge: { padding: 20 },
     routeTopRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -193,38 +154,20 @@ const createStyles = (
       fontSize: largeTouchMode ? 16 : 15,
       lineHeight: largeTouchMode ? 23 : 20,
     },
-    statsRow: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
+    statsRow: { flexDirection: 'row', gap: spacing.sm },
     statBox: {
       flex: 1,
       backgroundColor: colors.cardSoft,
       borderRadius: radius.lg,
       padding: largeTouchMode ? spacing.lg : spacing.md,
     },
-    statLabel: {
-      ...typography.caption,
-      color: colors.textMuted,
-      marginBottom: spacing.xs,
-    },
+    statLabel: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.xs },
     statValue: {
       ...typography.heading,
       color: colors.text,
       fontSize: largeTouchMode ? 20 : 18,
     },
-    emptyCard: {
-      marginTop: spacing.xl,
-      alignItems: 'center',
-    },
-    emptyTitle: {
-      ...typography.heading,
-      color: colors.text,
-      marginBottom: spacing.xs,
-    },
-    emptyDescription: {
-      ...typography.body,
-      color: colors.textSecondary,
-      textAlign: 'center',
-    },
+    emptyCard: { marginTop: spacing.xl, alignItems: 'center' },
+    emptyTitle: { ...typography.heading, color: colors.text, marginBottom: spacing.xs },
+    emptyDescription: { ...typography.body, color: colors.textSecondary, textAlign: 'center' },
   });

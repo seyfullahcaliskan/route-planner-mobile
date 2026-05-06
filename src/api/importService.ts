@@ -1,3 +1,4 @@
+// src/api/importService.ts
 import { api } from './client';
 
 export type ImportStopItem = {
@@ -7,6 +8,12 @@ export type ImportStopItem = {
     rawAddress: string;
     priorityNo?: number;
     deliveryNote?: string;
+    /**
+     * Mobil haritadan seçilmişse bu alanlar dolu gelir → backend geocoding API
+     * çağrısı YAPMAZ, doğrudan kullanır. (Maliyet kazanımı)
+     */
+    latitude?: number;
+    longitude?: number;
 };
 
 export type RouteImportPreviewRequest = {

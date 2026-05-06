@@ -1,15 +1,20 @@
+// app/import/manual.tsx
 import AppCard from '@/src/components/AppCard';
 import PrimaryButton from '@/src/components/PrimaryButton';
 import { useAppTheme } from '@/src/hooks/useAppTheme';
+import { useTranslation } from '@/src/hooks/useTranslation';
+import { useMapPickerStore } from '@/src/store/useMapPickerStore';
 import { useRouteImportStore } from '@/src/store/useRouteImportStore';
-import { spacing, typography } from '@/src/theme';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { radius, spacing, typography } from '@/src/theme';
+import { haptics } from '@/src/utils/haptics';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ManualImportScreen() {
     const { colors } = useAppTheme();
+    const { t } = useTranslation();
     const { addStop } = useRouteImportStore();
     const styles = createStyles(colors);
 
@@ -18,74 +23,128 @@ export default function ManualImportScreen() {
     const [rawAddress, setRawAddress] = useState('');
     const [deliveryNote, setDeliveryNote] = useState('');
     const [priorityNo, setPriorityNo] = useState('0');
+    const [latitude, setLatitude] = useState<number | undefined>(undefined);
+    const [longitude, setLongitude] = useState<number | undefined>(undefined);
+
+    /** Map picker'dan dönüldüğünde sonucu yakala. */
+    useFocusEffect(
+        useCallback(() => {
+            const result = useMapPickerStore.getState().consume();
+            if (result && useMapPickerStore.getState().target === null) {
+                // consume() target'i de null'lar; result varsa target'imiz biziz demek
+            }
+            if (result) {
+                setRawAddress(result.address);
+                setLatitude(result.latitude);
+                setLongitude(result.longitude);
+            }
+        }, [])
+    );
+
+    const handlePickOnMap = () => {
+        haptics.light();
+        useMapPickerStore.getState().open('import-manual-stop');
+        router.push('/map-picker');
+    };
 
     const handleAdd = () => {
-        if (!rawAddress.trim()) {
-            Alert.alert('Uyarı', 'Adres boş olamaz.');
+        if (!rawAddress.trim() && (latitude === undefined || longitude === undefined)) {
+            Alert.alert(t('common.warning'), t('import.addressEmpty'));
             return;
         }
 
         addStop({
-            customerName,
-            customerPhone,
-            rawAddress,
-            deliveryNote,
+            customerName: customerName || undefined,
+            customerPhone: customerPhone || undefined,
+            rawAddress: rawAddress.trim() || `${latitude?.toFixed(5)}, ${longitude?.toFixed(5)}`,
+            deliveryNote: deliveryNote || undefined,
             priorityNo: Number(priorityNo || '0'),
+            latitude,
+            longitude,
         });
 
+        haptics.success();
+        // Reset
         setCustomerName('');
         setCustomerPhone('');
         setRawAddress('');
         setDeliveryNote('');
         setPriorityNo('0');
+        setLatitude(undefined);
+        setLongitude(undefined);
 
-        Alert.alert('Başarılı', 'Adres eklendi.');
+        Alert.alert(t('common.success'), t('import.addressAdded'));
     };
+
+    const hasCoords = latitude !== undefined && longitude !== undefined;
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.title}>Tek Tek Adres Ekle</Text>
+            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                <Text style={styles.title}>{t('import.manualTitle')}</Text>
 
                 <AppCard>
-                    <Text style={styles.label}>Müşteri Adı</Text>
+                    <Text style={styles.label}>{t('import.customerName')}</Text>
                     <TextInput
                         value={customerName}
                         onChangeText={setCustomerName}
-                        placeholder="İsteğe bağlı"
+                        placeholder={t('common.optional')}
                         placeholderTextColor={colors.textMuted}
                         style={styles.input}
                     />
 
-                    <Text style={styles.label}>Telefon</Text>
+                    <Text style={styles.label}>{t('import.customerPhone')}</Text>
                     <TextInput
                         value={customerPhone}
                         onChangeText={setCustomerPhone}
-                        placeholder="İsteğe bağlı"
+                        placeholder={t('common.optional')}
                         placeholderTextColor={colors.textMuted}
+                        keyboardType="phone-pad"
                         style={styles.input}
                     />
 
-                    <Text style={styles.label}>Adres</Text>
+                    <Text style={styles.label}>{t('import.address')}</Text>
                     <TextInput
                         value={rawAddress}
-                        onChangeText={setRawAddress}
-                        placeholder="Teslimat adresi"
+                        onChangeText={(v) => {
+                            setRawAddress(v);
+                            // Manuel düzenleme yapıldıysa eski koordinatları temizle
+                            // (kullanıcı haritadan farklı bir adresi yazıyor olabilir)
+                            if (hasCoords && v !== rawAddress) {
+                                setLatitude(undefined);
+                                setLongitude(undefined);
+                            }
+                        }}
+                        placeholder={t('import.address')}
                         placeholderTextColor={colors.textMuted}
                         multiline
                         style={[styles.input, styles.textArea]}
                     />
 
-                    <Text style={styles.label}>Teslimat Notu</Text>
+                    {/* Haritadan Seç butonu */}
+                    <Pressable onPress={handlePickOnMap} style={styles.mapButton}>
+                        <Text style={styles.mapButtonText}>📍 {t('import.pickOnMap')}</Text>
+                    </Pressable>
+
+                    {hasCoords && (
+                        <View style={styles.coordsBadge}>
+                            <Text style={styles.coordsBadgeText}>
+                                ✓ {t('import.coordsSelected')} (
+                                {latitude!.toFixed(5)}, {longitude!.toFixed(5)})
+                            </Text>
+                        </View>
+                    )}
+
+                    <Text style={styles.label}>{t('import.deliveryNote')}</Text>
                     <TextInput
                         value={deliveryNote}
                         onChangeText={setDeliveryNote}
-                        placeholder="İsteğe bağlı"
+                        placeholder={t('common.optional')}
                         placeholderTextColor={colors.textMuted}
                         style={styles.input}
                     />
 
-                    <Text style={styles.label}>Öncelik</Text>
+                    <Text style={styles.label}>{t('import.priority')}</Text>
                     <TextInput
                         value={priorityNo}
                         onChangeText={setPriorityNo}
@@ -96,18 +155,14 @@ export default function ManualImportScreen() {
                     />
 
                     <View style={styles.buttonGroup}>
-                        <PrimaryButton title="Adresi Ekle" onPress={handleAdd} />
+                        <PrimaryButton title={t('import.addAddress')} onPress={handleAdd} />
                         <PrimaryButton
-                            title="Listeye Dön"
-                            onPress={() =>
-                                router.push({
-                                    pathname: '/import',
-                                })
-                            }
+                            title={t('import.backToList')}
+                            onPress={() => router.push({ pathname: '/import' })}
                         />
                     </View>
                 </AppCard>
-            </View>
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -115,7 +170,7 @@ export default function ManualImportScreen() {
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.page },
-        content: { padding: spacing.lg, gap: spacing.lg },
+        content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl },
         title: { ...typography.titleLarge, color: colors.text },
         label: {
             ...typography.body,
@@ -133,13 +188,30 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             paddingHorizontal: 14,
             marginBottom: spacing.md,
         },
-        textArea: {
-            minHeight: 120,
-            paddingTop: 14,
-            textAlignVertical: 'top',
+        textArea: { minHeight: 100, paddingTop: 14, textAlignVertical: 'top' },
+        mapButton: {
+            minHeight: 48,
+            borderRadius: radius.lg,
+            backgroundColor: colors.primarySoft,
+            borderWidth: 1,
+            borderColor: colors.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: spacing.md,
         },
-        buttonGroup: {
-            gap: spacing.md,
-            marginTop: spacing.sm,
+        mapButtonText: {
+            ...typography.body,
+            color: colors.primary,
+            fontWeight: '700',
         },
+        coordsBadge: {
+            backgroundColor: colors.cardSoft,
+            borderRadius: radius.md,
+            padding: spacing.sm,
+            marginBottom: spacing.md,
+            borderLeftWidth: 3,
+            borderLeftColor: colors.primary,
+        },
+        coordsBadgeText: { ...typography.caption, color: colors.textSecondary },
+        buttonGroup: { gap: spacing.md, marginTop: spacing.sm },
     });

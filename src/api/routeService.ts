@@ -1,11 +1,20 @@
+// src/api/routeService.ts
+import { useAuthStore } from '../store/useAuthStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { RoutePlanResponse, RouteStopResponse } from '../types/route';
 import { api } from './client';
 
-const DEMO_USER_ID = '1c34b887-83a4-4983-9954-12bca2aa2ce1';
+const requireUserId = (): string => {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) {
+        throw new Error('Oturum bulunamadı. Lütfen tekrar giriş yapın.');
+    }
+    return userId;
+};
 
 export const getUserRoutes = async (): Promise<RoutePlanResponse[]> => {
-    const response = await api.get(`/route-plans/user/${DEMO_USER_ID}`);
+    const userId = requireUserId();
+    const response = await api.get(`/route-plans/user/${userId}`);
     return response.data;
 };
 
@@ -39,16 +48,9 @@ export const getNavigationUrl = async (
     routeStopId: string
 ): Promise<{ navigationUrl: string }> => {
     const navigationProvider = useSettingsStore.getState().navigationProvider;
-
-    const response = await api.get(
-        `/route-stops/${routeStopId}/navigation-url`,
-        {
-            params: {
-                provider: navigationProvider,
-            },
-        }
-    );
-
+    const response = await api.get(`/route-stops/${routeStopId}/navigation-url`, {
+        params: { provider: navigationProvider },
+    });
     return response.data;
 };
 

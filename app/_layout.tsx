@@ -1,55 +1,96 @@
+// app/_layout.tsx
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
-import React from 'react';
-import * as Sentry from '@sentry/react-native';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import React, { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-Sentry.init({
-  dsn: 'https://92648e07c670e165d38a85212586be63@o4511331992338432.ingest.de.sentry.io/4511331992862800',
+import { useAppTheme } from '@/src/hooks/useAppTheme';
+import { useTranslation } from '@/src/hooks/useTranslation';
+import { isRefreshTokenValid, useAuthStore } from '@/src/store/useAuthStore';
 
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
-  sendDefaultPii: true,
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
-  // Enable Logs
-  enableLogs: true,
-
-  // Configure Session Replay
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1,
-  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, staleTime: 30_000 },
+  },
 });
 
-const queryClient = new QueryClient();
+/**
+ * Auth state ↔ route hiyerarşisi senkronizasyonu.
+ * setTimeout(0) ile navigation çağrısını sonraki tick'e erteliyoruz; bu sayede
+ * navigator router store'a register olduktan sonra replace çalışıyor ve
+ * "Attempted to navigate before mounting the Root Layout" hatası oluşmuyor.
+ */
+function AuthGate() {
+  const router = useRouter();
+  const segments = useSegments();
 
-export default Sentry.wrap(function RootLayout() {
+  const hydrated = useAuthStore((s) => s.hydrated);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
+  const refreshExpiresAt = useAuthStore((s) => s.refreshTokenExpiresAt);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const sessionValid = isRefreshTokenValid({
+      accessToken,
+      refreshToken,
+      refreshTokenExpiresAt: refreshExpiresAt,
+    } as any);
+
+    const inAuthGroup = segments[0] === 'auth';
+
+    const timer = setTimeout(() => {
+      if (!sessionValid && !inAuthGroup) {
+        router.replace('/auth/login');
+      } else if (sessionValid && inAuthGroup) {
+        router.replace('/(tabs)');
+      }
+      SplashScreen.hideAsync().catch(() => { });
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [hydrated, segments, accessToken, refreshToken, refreshExpiresAt, router]);
+
+  return null;
+}
+
+export default function RootLayout() {
+  const { colors, isDark } = useAppTheme();
+  const { t } = useTranslation();
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <Stack
-        screenOptions={{
-          headerShadowVisible: false,
-          headerStyle: {
-            backgroundColor: '#F2F2F7',
-          },
-          headerTitleStyle: {
-            fontWeight: '700',
-          },
-          headerTintColor: '#111827',
-          contentStyle: {
-            backgroundColor: '#F2F2F7',
-          },
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="routes/[routePlanId]" options={{ title: 'Rota Detayı' }} />
-        <Stack.Screen name="import/index" options={{ title: 'Yeni Rota' }} />
-        <Stack.Screen name="import/manual" options={{ title: 'Tek Tek Adres Ekle' }} />
-        <Stack.Screen name="import/paste" options={{ title: 'Toplu Yapıştır' }} />
-        <Stack.Screen name="import/csv" options={{ title: 'CSV Yükle' }} />
-        <Stack.Screen name="import/preview" options={{ title: 'Önizleme ve Onay' }} />
-      </Stack>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.page }}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <QueryClientProvider client={queryClient}>
+        <Stack
+          screenOptions={{
+            headerShadowVisible: false,
+            headerStyle: { backgroundColor: colors.page },
+            headerTitleStyle: { fontWeight: '700', color: colors.text },
+            headerTintColor: colors.text,
+            contentStyle: { backgroundColor: colors.page },
+          }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="auth" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="map-picker"
+            options={{ title: t('mapPicker.title'), presentation: 'modal' }}
+          />
+          <Stack.Screen name="routes/[routePlanId]" options={{ title: t('route.detail') }} />
+          <Stack.Screen name="import/index" options={{ title: t('import.title') }} />
+          <Stack.Screen name="import/manual" options={{ title: t('import.manualTitle') }} />
+          <Stack.Screen name="import/paste" options={{ title: t('import.pasteList') }} />
+          <Stack.Screen name="import/csv" options={{ title: t('import.csvUpload') }} />
+          <Stack.Screen name="import/preview" options={{ title: t('import.previewAndConfirm') }} />
+        </Stack>
+        <AuthGate />
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
-});
+}
