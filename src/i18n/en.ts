@@ -4,9 +4,11 @@ import type { TranslationKeys } from './tr';
 export const en: TranslationKeys = {
     common: {
         save: 'Save',
+        saving: 'Saving...',
         cancel: 'Cancel',
         confirm: 'Confirm',
         delete: 'Delete',
+        deleting: 'Deleting...',
         edit: 'Edit',
         back: 'Back',
         next: 'Next',
@@ -22,6 +24,14 @@ export const en: TranslationKeys = {
         search: 'Search',
         empty: 'No data yet',
         somethingWentWrong: 'Something went wrong',
+        tryAgain: 'Please try again',
+        networkError: 'Connection error. Check your internet.',
+        timeout: 'Server did not respond. Try again later.',
+        update: 'Update',
+        change: 'Change',
+        unsavedChanges: 'You have unsaved changes. Discard them?',
+        yes: 'Yes',
+        no: 'No',
     },
 
     auth: {
@@ -95,6 +105,8 @@ export const en: TranslationKeys = {
         fail: 'Failed',
         navigate: 'Navigate',
         reoptimize: 'Re-optimize',
+        reoptimizing: 'Updating route...',
+        addStop: 'Add Stop',
         totalDistance: 'Total Distance',
         estimatedDuration: 'Estimated Duration',
         completed: 'Completed',
@@ -103,6 +115,11 @@ export const en: TranslationKeys = {
         skipped: 'Skipped',
         failed: 'Failed',
         navigating: 'En Route',
+        addStopTitle: 'Add to Route',
+        addStopSubtitle: 'New stop will be inserted at optimal position',
+        addStopAndOptimize: 'Add and Re-sort',
+        addingStop: 'Adding and sorting...',
+        addStopSuccess: 'Stop added, route updated',
     },
 
     import: {
@@ -163,6 +180,7 @@ export const en: TranslationKeys = {
         user: 'User',
         language: 'Language',
         notifications: 'Notifications',
+        notificationsHint: 'Route updates and delivery reminders',
         largeTouchMode: 'Large Touch Mode',
 
         navigation: 'Navigation',
@@ -177,11 +195,120 @@ export const en: TranslationKeys = {
 
     places: {
         title: 'Saved Places',
+        subtitle: 'Save addresses you use often, pick them quickly in routes',
         addPlace: 'Add Place',
+        editPlace: 'Edit Place',
         placeName: 'Place Name',
         placeNamePlaceholder: 'Home, Work, Warehouse...',
+        placeType: 'Type',
+        placeTypeHome: 'Home',
+        placeTypeWork: 'Work',
+        placeTypeWarehouse: 'Warehouse',
+        placeTypeStore: 'Store',
+        placeTypeCustom: 'Custom',
         savedAddress: 'Saved Address',
         emptyTitle: 'No saved places',
         emptySubtitle: 'Save addresses you use often for quick selection',
+        defaultStart: 'Default start',
+        defaultEnd: 'Default end',
+        useAsDefaultStart: 'Use as default start in new routes',
+        useAsDefaultEnd: 'Use as default end in new routes',
+        deleteConfirmTitle: 'Delete?',
+        deleteConfirmMessage: 'Are you sure you want to delete "{name}"?',
+        deleteSuccess: 'Place deleted.',
+        saveSuccess: 'Place saved.',
+        updateSuccess: 'Changes saved.',
+
+        pickerTitle: 'Pick location',
+        pickerSavedTab: 'Saved',
+        pickerMapTab: 'Map',
+        pickerManualTab: 'Type',
+        pickerSaveAfter: 'Also save this place for next time',
+        pickerNoSaved: 'No saved places yet',
+        pickerSearch: 'Search by name or address...',
+        pickerOpenMap: '🗺️  Pick on Map',
+        pickerTypeAddress: '✍️  Type Manually',
+    },
+
+    profile: {
+        title: 'My Profile',
+        subtitle: 'Update your account info',
+        personalInfo: 'Personal Info',
+        contactInfo: 'Contact',
+        security: 'Security',
+        company: 'Company',
+        companyPlaceholder: 'Company name (optional)',
+
+        emailReadOnly: 'Email cannot be changed',
+        emailReadOnlyHint: 'Contact support to change your email',
+
+        changePassword: 'Change Password',
+        oldPassword: 'Current Password',
+        newPassword: 'New Password',
+        newPasswordConfirm: 'New Password (Repeat)',
+        passwordMismatch: 'Passwords do not match',
+        passwordChanged: 'Password updated',
+        oauthCannotChangePassword: 'Cannot change password for social (Google/Apple) accounts',
+
+        updateSuccess: 'Profile updated',
+    },
+
+    errors: {
+        VALIDATION_ERROR: 'Please check the fields.',
+        INVALID_REQUEST: 'Invalid request.',
+        BAD_CREDENTIALS: 'Invalid email or password.',
+
+        EMAIL_ALREADY_EXISTS: 'This email is already registered.',
+        OAUTH_VERIFICATION_FAILED: 'Social sign-in could not be verified.',
+        UNAUTHORIZED: 'Your session ended. Please sign in again.',
+        REFRESH_TOKEN_INVALID: 'Your session has expired.',
+
+        USER_NOT_FOUND: 'User not found.',
+        PASSWORD_INCORRECT: 'Current password is incorrect.',
+        PASSWORD_TOO_SHORT: 'Password must be at least 6 characters.',
+        PASSWORD_REQUIRED_FOR_OAUTH_USER: 'Cannot change password for social accounts.',
+        EMAIL_INVALID: 'Enter a valid email.',
+
+        PLACE_NOT_FOUND: 'Saved place not found.',
+        PLACE_FORBIDDEN: 'You don\'t have access to this place.',
+        PLACE_NAME_REQUIRED: 'Place name is required.',
+        PLACE_ADDRESS_REQUIRED: 'Address is required.',
+        PLACE_COORDS_REQUIRED: 'Coordinates required.',
+        PLACE_DEFAULT_CONFLICT: 'Cannot set multiple defaults at once.',
+
+        ROUTE_NOT_FOUND: 'Route not found.',
+        ROUTE_FORBIDDEN: 'You don\'t have access to this route.',
+        STOP_NOT_FOUND: 'Stop not found.',
+        GEOCODING_FAILED: 'Could not locate address. Be more specific or pick on map.',
+        OPTIMIZATION_FAILED: 'Could not optimize route. Try again.',
+
+        PLAN_LIMIT_EXCEEDED: 'Plan limit reached. Upgrade in settings.',
+
+        INTERNAL_ERROR: 'An unexpected error occurred. Try again.',
+
+        NETWORK_ERROR: 'Connection error. Check your internet.',
+        TIMEOUT: 'Server did not respond. Try again later.',
+        UNKNOWN: 'Something went wrong.',
+    },
+
+    notifications: {
+        permission: {
+            askTitle: 'Enable notifications?',
+            askMessage: 'Allow notifications to receive route updates and delivery reminders.',
+            allow: 'Allow',
+            later: 'Not Now',
+            denied: 'Notifications denied.',
+            deniedHint: 'You can enable them in system settings.',
+            openSettings: 'Open Settings',
+        },
+        sendTest: 'Send Test Notification',
+        testSent: 'Test notification sent. It should arrive in a few seconds.',
+        unregisterDevice: 'Unregister This Device',
+        eventTypes: {
+            ROUTE_REOPTIMIZED: 'Route updated',
+            STOP_DELIVERED: 'Stop delivered',
+            STOP_SKIPPED: 'Stop skipped',
+            STOP_FAILED: 'Stop failed',
+        },
     },
 };

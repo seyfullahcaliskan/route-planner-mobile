@@ -1,17 +1,23 @@
-// app/places/create.tsx
+// app/places/edit/[id].tsx
 import AppCard from '@/src/components/AppCard';
 import PrimaryButton from '@/src/components/PrimaryButton';
-import { createPlace, SavedPlaceType } from '@/src/api/placeService';
+import {
+    deletePlace,
+    getMyPlaces,
+    SavedPlaceType,
+    updatePlace,
+} from '@/src/api/placeService';
 import { useAppTheme } from '@/src/hooks/useAppTheme';
 import { useApiError } from '@/src/hooks/useApiError';
 import { useTranslation } from '@/src/hooks/useTranslation';
 import { useMapPickerStore } from '@/src/store/useMapPickerStore';
 import { radius, spacing, typography } from '@/src/theme';
 import { haptics } from '@/src/utils/haptics';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Stack, router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
     Platform,
@@ -33,24 +39,49 @@ const PLACE_TYPES: Array<{ key: SavedPlaceType; icon: string; labelKey: string }
     { key: 'CUSTOM', icon: '📍', labelKey: 'places.placeTypeCustom' },
 ];
 
-export default function CreatePlaceScreen() {
+export default function EditPlaceScreen() {
+    const { id } = useLocalSearchParams<{ id: string }>();
     const { colors } = useAppTheme();
     const { t } = useTranslation();
     const { show: showError } = useApiError();
     const queryClient = useQueryClient();
     const styles = createStyles(colors);
 
+    /**
+     * Tek kaydı çekmek için ayrı bir endpoint çağrısı yapmak yerine
+     * mevcut listeden okuyoruz — getMyPlaces zaten cache'te.
+     * Bu sayede +1 API çağrısı yapmıyoruz.
+     */
+    const { data: places = [], isLoading } = useQuery({
+        queryKey: ['myPlaces'],
+        queryFn: getMyPlaces,
+        staleTime: 60_000,
+    });
+
+    const original = places.find((p) => p.id === id);
+
     const [placeName, setPlaceName] = useState('');
-    const [placeType, setPlaceType] = useState<SavedPlaceType>('HOME');
+    const [placeType, setPlaceType] = useState<SavedPlaceType>('CUSTOM');
     const [address, setAddress] = useState('');
     const [latitude, setLatitude] = useState<number | undefined>(undefined);
     const [longitude, setLongitude] = useState<number | undefined>(undefined);
     const [isDefaultStart, setIsDefaultStart] = useState(false);
     const [isDefaultEnd, setIsDefaultEnd] = useState(false);
 
-    /**
-     * Map picker'dan dönüş — focus aldığımızda store'u tüketiyoruz.
-     */
+    // Yüklenince state'i senkronla — sadece bir kez
+    useEffect(() => {
+        if (original && placeName === '' && address === '') {
+            setPlaceName(original.placeName);
+            setPlaceType(original.placeType);
+            setAddress(original.address);
+            setLatitude(original.latitude);
+            setLongitude(original.longitude);
+            setIsDefaultStart(original.isDefaultStart);
+            setIsDefaultEnd(original.isDefaultEnd);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [original]);
+
     useFocusEffect(
         useCallback(() => {
             const target = useMapPickerStore.getState().target;
@@ -71,33 +102,86 @@ export default function CreatePlaceScreen() {
         router.push('/map-picker');
     };
 
-    const createMutation = useMutation({
+    const updateMutation = useMutation({
         mutationFn: () =>
-            createPlace({
+            updatePlace(id!, {
                 placeName: placeName.trim(),
                 placeType,
                 address: address.trim(),
-                latitude: latitude!,
-                longitude: longitude!,
+                latitude,
+                longitude,
                 isDefaultStart,
                 isDefaultEnd,
             }),
         onSuccess: () => {
             haptics.success();
             queryClient.invalidateQueries({ queryKey: ['myPlaces'] });
-            Alert.alert(t('common.success'), t('places.saveSuccess'), [
+            Alert.alert(t('common.success'), t('places.updateSuccess'), [
                 { text: t('common.ok'), onPress: () => router.back() },
             ]);
         },
         onError: (e) => showError(e),
     });
 
-    const canSubmit =
-        placeName.trim().length > 0 &&
-        address.trim().length > 0 &&
-        latitude !== undefined &&
-        longitude !== undefined &&
-        !createMutation.isPending;
+    const deleteMutation = useMutation({
+        mutationFn: () => deletePlace(id!),
+        onSuccess: () => {
+            haptics.success();
+            queryClient.invalidateQueries({ queryKey: ['myPlaces'] });
+            router.back();
+        },
+        onError: (e) => showError(e),
+    });
+
+    const confirmDelete = () => {
+        Alert.alert(
+            t('places.deleteConfirmTitle'),
+            t('places.deleteConfirmMessage', { name: placeName }),
+            [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                    text: t('common.delete'),
+                    style: 'destructive',
+                    onPress: () => deleteMutation.mutate(),
+                },
+            ]
+        );
+    };
+
+    const dirty =
+        original &&
+        (placeName !== original.placeName ||
+            placeType !== original.placeType ||
+            address !== original.address ||
+            latitude !== original.latitude ||
+            longitude !== original.longitude ||
+            isDefaultStart !== original.isDefaultStart ||
+            isDefaultEnd !== original.isDefaultEnd);
+
+    if (isLoading) {
+        return (
+            <SafeAreaView style={[styles.safe, styles.center]}>
+                <ActivityIndicator color={colors.primary} />
+            </SafeAreaView>
+        );
+    }
+
+    if (!original) {
+        return (
+            <SafeAreaView style={[styles.safe, styles.center]}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <Text style={[styles.title, { textAlign: 'center' }]}>
+                    {t('errors.PLACE_NOT_FOUND')}
+                </Text>
+                <Pressable
+                    onPress={() => router.back()}
+                    style={[styles.changeButton, { marginTop: spacing.md }]}
+                >
+                    <Text style={styles.changeButtonText}>{t('common.back')}</Text>
+                </Pressable>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
@@ -108,9 +192,11 @@ export default function CreatePlaceScreen() {
                     <Text style={styles.backText}>‹</Text>
                 </Pressable>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.title}>{t('places.addPlace')}</Text>
-                    <Text style={styles.subtitle}>{t('places.subtitle')}</Text>
+                    <Text style={styles.title}>{t('places.editPlace')}</Text>
                 </View>
+                <Pressable onPress={confirmDelete} style={styles.deleteIconBtn}>
+                    <Text style={styles.deleteIconText}>🗑️</Text>
+                </Pressable>
             </View>
 
             <KeyboardAvoidingView
@@ -123,7 +209,6 @@ export default function CreatePlaceScreen() {
                     keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Yer Adı */}
                     <Text style={styles.fieldLabel}>{t('places.placeName')}</Text>
                     <TextInput
                         value={placeName}
@@ -134,7 +219,6 @@ export default function CreatePlaceScreen() {
                         maxLength={80}
                     />
 
-                    {/* Tip seçici */}
                     <Text style={styles.fieldLabel}>{t('places.placeType')}</Text>
                     <View style={styles.typeRow}>
                         {PLACE_TYPES.map((tp) => (
@@ -162,39 +246,23 @@ export default function CreatePlaceScreen() {
                         ))}
                     </View>
 
-                    {/* Adres / harita seçimi */}
-                    <Text style={styles.fieldLabel}>
-                        {t('places.savedAddress')}
-                    </Text>
-                    {latitude !== undefined && longitude !== undefined ? (
-                        <View style={styles.addressBox}>
-                            <Text style={styles.addressText} numberOfLines={3}>
-                                📍 {address}
-                            </Text>
+                    <Text style={styles.fieldLabel}>{t('places.savedAddress')}</Text>
+                    <View style={styles.addressBox}>
+                        <Text style={styles.addressText} numberOfLines={3}>
+                            📍 {address}
+                        </Text>
+                        {latitude !== undefined && longitude !== undefined && (
                             <Text style={styles.coordsText}>
                                 {latitude.toFixed(5)}, {longitude.toFixed(5)}
                             </Text>
-                            <Pressable
-                                onPress={openMapPicker}
-                                style={styles.changeButton}
-                            >
-                                <Text style={styles.changeButtonText}>
-                                    {t('common.change')}
-                                </Text>
-                            </Pressable>
-                        </View>
-                    ) : (
-                        <Pressable onPress={openMapPicker} style={styles.mapCta}>
-                            <Text style={styles.mapCtaText}>
-                                🗺️  {t('import.pickOnMap')}
-                            </Text>
-                            <Text style={styles.mapCtaHint}>
-                                {t('mapPicker.searchHint')}
+                        )}
+                        <Pressable onPress={openMapPicker} style={styles.changeButton}>
+                            <Text style={styles.changeButtonText}>
+                                {t('common.change')}
                             </Text>
                         </Pressable>
-                    )}
+                    </View>
 
-                    {/* Varsayılan toggleları */}
                     <AppCard style={{ marginTop: spacing.lg }}>
                         <View style={styles.toggleRow}>
                             <View style={{ flex: 1, paddingRight: spacing.sm }}>
@@ -204,16 +272,11 @@ export default function CreatePlaceScreen() {
                             </View>
                             <Switch
                                 value={isDefaultStart}
-                                onValueChange={(v) => {
-                                    haptics.light();
-                                    setIsDefaultStart(v);
-                                }}
+                                onValueChange={setIsDefaultStart}
                                 trackColor={{ false: colors.border, true: colors.primary }}
                             />
                         </View>
-
                         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
                         <View style={styles.toggleRow}>
                             <View style={{ flex: 1, paddingRight: spacing.sm }}>
                                 <Text style={styles.toggleTitle}>
@@ -222,10 +285,7 @@ export default function CreatePlaceScreen() {
                             </View>
                             <Switch
                                 value={isDefaultEnd}
-                                onValueChange={(v) => {
-                                    haptics.light();
-                                    setIsDefaultEnd(v);
-                                }}
+                                onValueChange={setIsDefaultEnd}
                                 trackColor={{ false: colors.border, true: colors.primary }}
                             />
                         </View>
@@ -233,14 +293,33 @@ export default function CreatePlaceScreen() {
 
                     <PrimaryButton
                         title={
-                            createMutation.isPending
+                            updateMutation.isPending
                                 ? t('common.saving')
-                                : t('common.save')
+                                : t('common.update')
                         }
-                        onPress={() => createMutation.mutate()}
-                        disabled={!canSubmit}
+                        onPress={() => updateMutation.mutate()}
+                        disabled={
+                            !placeName.trim() ||
+                            !address.trim() ||
+                            latitude === undefined ||
+                            longitude === undefined ||
+                            !dirty ||
+                            updateMutation.isPending
+                        }
                         style={{ marginTop: spacing.lg }}
                     />
+
+                    <Pressable
+                        onPress={confirmDelete}
+                        style={({ pressed }) => [
+                            styles.deleteButton,
+                            pressed && { opacity: 0.7 },
+                        ]}
+                    >
+                        <Text style={styles.deleteButtonText}>
+                            🗑️ {t('common.delete')}
+                        </Text>
+                    </Pressable>
 
                     <View style={{ height: spacing.xl }} />
                 </ScrollView>
@@ -252,6 +331,7 @@ export default function CreatePlaceScreen() {
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     StyleSheet.create({
         safe: { flex: 1, backgroundColor: colors.page },
+        center: { alignItems: 'center', justifyContent: 'center' },
 
         header: {
             flexDirection: 'row',
@@ -276,11 +356,15 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             marginTop: -3,
         },
         title: { ...typography.heading, color: colors.text },
-        subtitle: {
-            ...typography.bodySmall,
-            color: colors.textSecondary,
-            marginTop: 2,
+        deleteIconBtn: {
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: colors.cardSoft,
+            alignItems: 'center',
+            justifyContent: 'center',
         },
+        deleteIconText: { fontSize: 18 },
 
         content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
 
@@ -330,27 +414,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
         },
         typeChipTextActive: { color: colors.primary, fontWeight: '700' },
 
-        mapCta: {
-            paddingVertical: spacing.lg,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.lg,
-            backgroundColor: colors.primarySoft,
-            borderWidth: 1.5,
-            borderColor: colors.primary,
-            alignItems: 'center',
-            gap: 4,
-        },
-        mapCtaText: {
-            ...typography.body,
-            color: colors.primary,
-            fontWeight: '700',
-        },
-        mapCtaHint: {
-            ...typography.caption,
-            color: colors.primary,
-            opacity: 0.7,
-        },
-
         addressBox: {
             padding: spacing.md,
             borderRadius: radius.lg,
@@ -397,4 +460,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             fontWeight: '600',
         },
         divider: { height: 1, marginVertical: spacing.xs ?? 4 },
+
+        deleteButton: {
+            marginTop: spacing.md,
+            paddingVertical: spacing.md,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: radius.lg,
+        },
+        deleteButtonText: {
+            ...typography.body,
+            color: colors.danger,
+            fontWeight: '700',
+        },
     });

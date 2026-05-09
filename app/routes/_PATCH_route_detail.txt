@@ -1,0 +1,115 @@
+// ============================================================================
+// PATCH: app/routes/[routePlanId].tsx
+// ============================================================================
+//
+// Mevcut route detail dosyası 993 satır — komple yeniden yazmak yerine
+// SADECE 3 küçük değişiklik yapacağız. Aşağıdaki blokları doğrudan dosyaya uygula.
+//
+// (1) yeni import'lar
+// (2) sticky bar'a "+ Durak Ekle" butonu
+// (3) Reoptimize / Stop action mutation'larında onError'a useApiError ekle (opsiyonel)
+//
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// (1) IMPORT'LAR — dosyanın en üstündeki diğer import'ların yanına ekle:
+// ----------------------------------------------------------------------------
+import { router } from 'expo-router';
+import { useApiError } from '@/src/hooks/useApiError';
+import { useTranslation } from '@/src/hooks/useTranslation';
+
+// ----------------------------------------------------------------------------
+// (2) STICKY BAR — Reoptimize butonunun yanına yeni bir buton:
+// ----------------------------------------------------------------------------
+//
+// Mevcut sticky bar kısmında muhtemelen şöyle bir şey var:
+//
+//     <View style={styles.stickyBar}>
+//         <PrimaryButton
+//             title="Yeniden Optimize Et"
+//             onPress={() => reoptimizeMutation.mutate()}
+//             disabled={...}
+//         />
+//     </View>
+//
+// Bunu şu şekilde değiştir (iki butonu yan yana koy):
+//
+//     <View style={styles.stickyBar}>
+//         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+//             <Pressable
+//                 onPress={() => router.push(`/routes/add-stop/${routePlanId}`)}
+//                 style={({ pressed }) => [
+//                     styles.secondaryFab,
+//                     pressed && { opacity: 0.85 },
+//                 ]}
+//             >
+//                 <Text style={styles.secondaryFabText}>
+//                     + {t('route.addStop')}
+//                 </Text>
+//             </Pressable>
+//             <View style={{ flex: 1 }}>
+//                 <PrimaryButton
+//                     title={
+//                         reoptimizeMutation.isPending
+//                             ? t('route.reoptimizing')
+//                             : t('route.reoptimize')
+//                     }
+//                     onPress={() => reoptimizeMutation.mutate()}
+//                     disabled={reoptimizeMutation.isPending}
+//                 />
+//             </View>
+//         </View>
+//     </View>
+//
+// Component fonksiyonunun başına şunu ekle:
+//
+//     const { t } = useTranslation();
+//     const { show: showError } = useApiError();
+//
+// ----------------------------------------------------------------------------
+// (3) STYLES — secondaryFab için yeni stil:
+// ----------------------------------------------------------------------------
+//
+// styles objesine ekle (createStyles içinde):
+//
+//     secondaryFab: {
+//         minWidth: 110,
+//         height: 54,
+//         borderRadius: radius.lg,
+//         backgroundColor: colors.cardSoft,
+//         borderWidth: 1.5,
+//         borderColor: colors.primary,
+//         alignItems: 'center',
+//         justifyContent: 'center',
+//         paddingHorizontal: spacing.md,
+//     },
+//     secondaryFabText: {
+//         ...typography.body,
+//         color: colors.primary,
+//         fontWeight: '700',
+//     },
+//
+// ----------------------------------------------------------------------------
+// (4) HATA YÖNETİMİ — mutation'larda onError eklemesi (opsiyonel ama tavsiye):
+// ----------------------------------------------------------------------------
+//
+// reoptimizeMutation, deliverMutation, skipMutation, failMutation gibi
+// useMutation çağrılarına onError ekle:
+//
+//     const reoptimizeMutation = useMutation({
+//         mutationFn: () => reoptimizeRoute(routePlanId!),
+//         onSuccess: (data) => {
+//             // mevcut başarı kodu ...
+//         },
+//         onError: (e) => showError(e),   // ← BU SATIRI EKLE
+//     });
+//
+// Bu sayede backend'in döndüğü tüm hatalar otomatik çevrilmiş Alert ile gösterilir.
+//
+// ============================================================================
+// DEĞİŞMEYECEK KISIMLAR:
+// - FlatList stop kartları
+// - MapView ve markerlar
+// - Mevcut state ve query yapısı
+// - Animasyonlar
+// ============================================================================

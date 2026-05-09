@@ -1,6 +1,6 @@
 // app/import/manual.tsx
 import AppCard from '@/src/components/AppCard';
-import LocationPicker from '@/src/components/LocationPicker';
+import PlacePickerSheet, { PickedLocation } from '@/src/components/PlacePickerSheet';
 import PrimaryButton from '@/src/components/PrimaryButton';
 import { useAppTheme } from '@/src/hooks/useAppTheme';
 import { useTranslation } from '@/src/hooks/useTranslation';
@@ -12,6 +12,7 @@ import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
     Alert,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -27,6 +28,7 @@ export default function ManualImportScreen() {
     const { addStop, stops } = useRouteImportStore();
     const styles = createStyles(colors);
 
+    const [pickerOpen, setPickerOpen] = useState(false);
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
     const [rawAddress, setRawAddress] = useState('');
@@ -86,6 +88,12 @@ export default function ManualImportScreen() {
         }
     };
 
+    const handlePicked = (loc: PickedLocation) => {
+        setRawAddress(loc.address);
+        setLatitude(loc.latitude);
+        setLongitude(loc.longitude);
+    };
+
     const hasCoords = latitude !== undefined && longitude !== undefined;
     const canSave = rawAddress.trim().length > 0 || hasCoords;
 
@@ -100,46 +108,49 @@ export default function ManualImportScreen() {
                     <Text style={styles.title}>{t('import.manualTitle')}</Text>
                     <Text style={styles.subtitle}>
                         {stops.length === 0
-                            ? 'İlk adresi ekleyerek başla'
-                            : `${stops.length} adres eklendi · Yeni durak ekle`}
+                            ? t('import.subtitle')
+                            : t('import.stopCount', { count: stops.length })}
                     </Text>
                 </View>
 
-                {/* Adres kartı */}
+                {/* Adres kartı — yeni picker */}
                 <AppCard>
                     <View style={styles.cardHeader}>
                         <Text style={styles.cardEmoji}>📍</Text>
-                        <Text style={styles.cardHeaderText}>Adres</Text>
+                        <Text style={styles.cardHeaderText}>{t('import.address')}</Text>
                     </View>
 
-                    <LocationPicker
-                        value={{ address: rawAddress, latitude, longitude }}
-                        onChange={(v) => {
-                            setRawAddress(v.address);
-                            setLatitude(v.latitude);
-                            setLongitude(v.longitude);
-                        }}
-                        mapPickerTarget="import-manual-stop"
-                    />
-
-                    {/* Elle yazma seçeneği — sadece henüz adres seçilmemişse göster */}
-                    {!canSave && (
-                        <>
-                            <View style={styles.dividerRow}>
-                                <View style={styles.dividerLine} />
-                                <Text style={styles.orText}>veya elle yaz</Text>
-                                <View style={styles.dividerLine} />
-                            </View>
-
-                            <TextInput
-                                value={rawAddress}
-                                onChangeText={setRawAddress}
-                                placeholder="Mahalle, sokak, no..."
-                                placeholderTextColor={colors.textMuted}
-                                multiline
-                                style={[styles.input, styles.textArea]}
-                            />
-                        </>
+                    {canSave ? (
+                        <View style={styles.pickedBox}>
+                            <Text style={styles.pickedAddress} numberOfLines={3}>
+                                📍 {rawAddress}
+                            </Text>
+                            {hasCoords && (
+                                <Text style={styles.pickedCoords}>
+                                    {latitude?.toFixed(5)}, {longitude?.toFixed(5)}
+                                </Text>
+                            )}
+                            <Pressable
+                                onPress={() => setPickerOpen(true)}
+                                style={styles.changeButton}
+                            >
+                                <Text style={styles.changeButtonText}>
+                                    {t('common.change')}
+                                </Text>
+                            </Pressable>
+                        </View>
+                    ) : (
+                        <Pressable
+                            onPress={() => setPickerOpen(true)}
+                            style={styles.pickerCta}
+                        >
+                            <Text style={styles.pickerCtaText}>
+                                ⭐ {t('places.pickerTitle')}
+                            </Text>
+                            <Text style={styles.pickerCtaHint}>
+                                {t('places.pickerSavedTab')} • {t('places.pickerMapTab')} • {t('places.pickerManualTab')}
+                            </Text>
+                        </Pressable>
                     )}
                 </AppCard>
 
@@ -148,7 +159,7 @@ export default function ManualImportScreen() {
                     <View style={styles.cardHeader}>
                         <Text style={styles.cardEmoji}>👤</Text>
                         <Text style={styles.cardHeaderText}>
-                            Müşteri{' '}
+                            {t('import.customerName')}{' '}
                             <Text style={styles.optional}>({t('common.optional')})</Text>
                         </Text>
                     </View>
@@ -166,7 +177,7 @@ export default function ManualImportScreen() {
                     <TextInput
                         value={customerPhone}
                         onChangeText={setCustomerPhone}
-                        placeholder="5xx xxx xx xx"
+                        placeholder={t('auth.phonePlaceholder')}
                         placeholderTextColor={colors.textMuted}
                         keyboardType="phone-pad"
                         style={styles.input}
@@ -178,7 +189,7 @@ export default function ManualImportScreen() {
                     <View style={styles.cardHeader}>
                         <Text style={styles.cardEmoji}>📝</Text>
                         <Text style={styles.cardHeaderText}>
-                            Detaylar{' '}
+                            {t('import.deliveryNote')}{' '}
                             <Text style={styles.optional}>({t('common.optional')})</Text>
                         </Text>
                     </View>
@@ -209,10 +220,17 @@ export default function ManualImportScreen() {
                                 <Text
                                     style={[
                                         styles.priorityChipText,
-                                        priorityNo === String(n) && styles.priorityChipTextActive,
+                                        priorityNo === String(n) &&
+                                            styles.priorityChipTextActive,
                                     ]}
                                 >
-                                    {n === 0 ? 'Normal' : n === 1 ? 'Düşük' : n === 2 ? 'Orta' : 'Yüksek'}
+                                    {n === 0
+                                        ? 'Normal'
+                                        : n === 1
+                                          ? 'Düşük'
+                                          : n === 2
+                                            ? 'Orta'
+                                            : 'Yüksek'}
                                 </Text>
                             </Pressable>
                         ))}
@@ -221,7 +239,7 @@ export default function ManualImportScreen() {
 
                 <View style={{ gap: spacing.md }}>
                     <PrimaryButton
-                        title="Ekle ve Yeni Durak Daha Ekle"
+                        title={`+ ${t('import.addAddress')}`}
                         onPress={() => handleAdd(true)}
                         disabled={!canSave}
                     />
@@ -234,10 +252,20 @@ export default function ManualImportScreen() {
                             !canSave && styles.disabled,
                         ]}
                     >
-                        <Text style={styles.secondaryButtonText}>Ekle ve Listeye Dön</Text>
+                        <Text style={styles.secondaryButtonText}>
+                            {t('import.backToList')}
+                        </Text>
                     </Pressable>
                 </View>
             </ScrollView>
+
+            <PlacePickerSheet
+                visible={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onPick={handlePicked}
+                mapPickerTarget="import-manual-stop"
+                title={t('import.address')}
+            />
         </SafeAreaView>
     );
 }
@@ -245,10 +273,21 @@ export default function ManualImportScreen() {
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.page },
-        content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxxl },
+        content: {
+            padding: spacing.lg,
+            gap: spacing.lg,
+            paddingBottom: spacing.xxxl ?? 80,
+        },
 
-        title: { ...typography.titleLarge, color: colors.text },
-        subtitle: { ...typography.body, color: colors.textSecondary, marginTop: 4 },
+        title: {
+            ...(typography.titleLarge ?? typography.heading),
+            color: colors.text,
+        },
+        subtitle: {
+            ...typography.body,
+            color: colors.textSecondary,
+            marginTop: 4,
+        },
 
         cardHeader: {
             flexDirection: 'row',
@@ -275,16 +314,60 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             marginBottom: 6,
         },
 
-        dividerRow: {
-            flexDirection: 'row',
+        pickerCta: {
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.lg,
+            backgroundColor: colors.primarySoft,
+            borderWidth: 1.5,
+            borderColor: colors.primary,
             alignItems: 'center',
-            gap: spacing.sm,
-            marginVertical: spacing.md,
+            gap: 4,
         },
-        dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-        orText: {
+        pickerCtaText: {
+            ...typography.body,
+            color: colors.primary,
+            fontWeight: '700',
+        },
+        pickerCtaHint: {
+            ...typography.caption,
+            color: colors.primary,
+            opacity: 0.7,
+            fontSize: 11,
+        },
+
+        pickedBox: {
+            padding: spacing.md,
+            borderRadius: radius.lg,
+            backgroundColor: colors.cardSoft,
+            borderLeftWidth: 3,
+            borderLeftColor: colors.primary,
+        },
+        pickedAddress: {
+            ...typography.body,
+            color: colors.text,
+            fontWeight: '500',
+        },
+        pickedCoords: {
             ...typography.caption,
             color: colors.textMuted,
+            marginTop: 4,
+            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        },
+        changeButton: {
+            marginTop: spacing.sm,
+            alignSelf: 'flex-start',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: radius.md,
+            backgroundColor: colors.card,
+            borderWidth: 1,
+            borderColor: colors.border,
+        },
+        changeButtonText: {
+            ...typography.caption,
+            color: colors.primary,
+            fontWeight: '700',
         },
 
         input: {
@@ -296,12 +379,6 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             color: colors.text,
             paddingHorizontal: spacing.md,
             marginBottom: spacing.md,
-        },
-        textArea: {
-            minHeight: 90,
-            paddingTop: 14,
-            textAlignVertical: 'top',
-            marginBottom: 0,
         },
 
         priorityRow: {

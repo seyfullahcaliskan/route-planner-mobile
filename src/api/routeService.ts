@@ -63,3 +63,31 @@ export const reoptimizeRoute = async (routePlanId: string): Promise<RouteStopRes
     });
     return response.data;
 };
+
+// ---- Yola çıkmışken durak ekle + reoptimize (tek round-trip) ----
+
+export type AddStopPayload = {
+    customerName?: string;
+    customerPhone?: string;
+    rawAddress: string;
+    deliveryNote?: string;
+    priorityNo?: number;
+    latitude?: number;
+    longitude?: number;
+};
+
+export const addStopsAndReoptimize = async (
+    routePlanId: string,
+    stops: AddStopPayload[]
+): Promise<RouteStopResponse[]> => {
+    const response = await api.post(`/route-plans/${routePlanId}/stops-and-reoptimize`, {
+        stops,
+        reoptimize: {
+            includeSkippedStops: true,
+            includeFailedStops: false,
+            includePostponedStops: true,
+            note: 'Yeni durak eklendi - otomatik reoptimize',
+        },
+    });
+    return response.data;
+};

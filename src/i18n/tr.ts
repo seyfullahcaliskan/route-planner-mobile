@@ -2,9 +2,11 @@
 export const tr = {
     common: {
         save: 'Kaydet',
+        saving: 'Kaydediliyor...',
         cancel: 'İptal',
         confirm: 'Onayla',
         delete: 'Sil',
+        deleting: 'Siliniyor...',
         edit: 'Düzenle',
         back: 'Geri',
         next: 'İleri',
@@ -20,6 +22,14 @@ export const tr = {
         search: 'Ara',
         empty: 'Henüz veri yok',
         somethingWentWrong: 'Bir şeyler ters gitti',
+        tryAgain: 'Lütfen tekrar deneyin',
+        networkError: 'Bağlantı hatası. İnternetini kontrol et.',
+        timeout: 'Sunucu yanıt vermedi. Daha sonra tekrar dene.',
+        update: 'Güncelle',
+        change: 'Değiştir',
+        unsavedChanges: 'Kaydedilmemiş değişiklikleriniz var. Çıkmak istiyor musunuz?',
+        yes: 'Evet',
+        no: 'Hayır',
     },
 
     auth: {
@@ -93,6 +103,8 @@ export const tr = {
         fail: 'Başarısız',
         navigate: 'Yol Tarifi',
         reoptimize: 'Yeniden Optimize Et',
+        reoptimizing: 'Rota Güncelleniyor...',
+        addStop: 'Durak Ekle',
         totalDistance: 'Toplam Mesafe',
         estimatedDuration: 'Tahmini Süre',
         completed: 'Tamamlandı',
@@ -101,6 +113,11 @@ export const tr = {
         skipped: 'Atlandı',
         failed: 'Başarısız',
         navigating: 'Yolda',
+        addStopTitle: 'Durağa Ekle',
+        addStopSubtitle: 'Yeni durak hemen optimum sıraya yerleşir',
+        addStopAndOptimize: 'Ekle ve Yeniden Sırala',
+        addingStop: 'Ekleniyor ve sıralanıyor...',
+        addStopSuccess: 'Durak eklendi, rota güncellendi',
     },
 
     import: {
@@ -161,6 +178,7 @@ export const tr = {
         user: 'Kullanıcı',
         language: 'Dil',
         notifications: 'Bildirimler',
+        notificationsHint: 'Rota güncellemeleri ve teslimat hatırlatmaları',
         largeTouchMode: 'Büyük Dokunma Modu',
 
         navigation: 'Navigasyon',
@@ -175,12 +193,127 @@ export const tr = {
 
     places: {
         title: 'Kayıtlı Yerler',
+        subtitle: 'Sık kullandığın adresleri kaydet, rotada hızlıca seç',
         addPlace: 'Yer Ekle',
+        editPlace: 'Yeri Düzenle',
         placeName: 'Yer Adı',
         placeNamePlaceholder: 'Ev, İş, Depo...',
+        placeType: 'Tip',
+        placeTypeHome: 'Ev',
+        placeTypeWork: 'İş',
+        placeTypeWarehouse: 'Depo',
+        placeTypeStore: 'Mağaza',
+        placeTypeCustom: 'Özel',
         savedAddress: 'Kayıtlı Adres',
         emptyTitle: 'Kayıtlı yerin yok',
         emptySubtitle: 'Sık kullandığın adresleri kaydet, hızlıca seç',
+        defaultStart: 'Varsayılan başlangıç',
+        defaultEnd: 'Varsayılan bitiş',
+        useAsDefaultStart: 'Yeni rotalarda varsayılan başlangıç olsun',
+        useAsDefaultEnd: 'Yeni rotalarda varsayılan bitiş olsun',
+        deleteConfirmTitle: 'Sil?',
+        deleteConfirmMessage: '"{name}" adlı kayıtlı yeri silmek istediğine emin misin?',
+        deleteSuccess: 'Kayıtlı yer silindi.',
+        saveSuccess: 'Kayıtlı yer kaydedildi.',
+        updateSuccess: 'Değişiklikler kaydedildi.',
+
+        // Picker
+        pickerTitle: 'Konum seç',
+        pickerSavedTab: 'Kayıtlılar',
+        pickerMapTab: 'Haritadan',
+        pickerManualTab: 'Yaz',
+        pickerSaveAfter: 'Bu konumu kayıtlı yerlerime de ekle',
+        pickerNoSaved: 'Henüz kayıtlı yerin yok',
+        pickerSearch: 'Yer adı veya adres ara...',
+        pickerOpenMap: '🗺️  Haritadan Seç',
+        pickerTypeAddress: '✍️  Elle Yaz',
+    },
+
+    profile: {
+        title: 'Profilim',
+        subtitle: 'Hesap bilgilerini güncelle',
+        personalInfo: 'Kişisel Bilgiler',
+        contactInfo: 'İletişim',
+        security: 'Güvenlik',
+        company: 'Şirket',
+        companyPlaceholder: 'Şirket adı (isteğe bağlı)',
+
+        emailReadOnly: 'E-posta değiştirilemez',
+        emailReadOnlyHint: 'E-posta değişimi için destek ile iletişime geç',
+
+        changePassword: 'Şifreyi Değiştir',
+        oldPassword: 'Mevcut Şifre',
+        newPassword: 'Yeni Şifre',
+        newPasswordConfirm: 'Yeni Şifre (Tekrar)',
+        passwordMismatch: 'Yeni şifreler eşleşmiyor',
+        passwordChanged: 'Şifren güncellendi',
+        oauthCannotChangePassword: 'Sosyal hesap (Google/Apple) ile giriş yaptığın için şifre değiştirilemez',
+
+        updateSuccess: 'Profilin güncellendi',
+    },
+
+    /**
+     * Backend'in döndüğü errorCode → kullanıcı dostu mesaj.
+     * Frontend useApiError hook'u response.data.errorCode'a bakar.
+     */
+    errors: {
+        VALIDATION_ERROR: 'Lütfen alanları kontrol et.',
+        INVALID_REQUEST: 'Geçersiz istek.',
+        BAD_CREDENTIALS: 'E-posta veya şifre hatalı.',
+
+        EMAIL_ALREADY_EXISTS: 'Bu e-posta zaten kayıtlı.',
+        OAUTH_VERIFICATION_FAILED: 'Sosyal medya girişi doğrulanamadı.',
+        UNAUTHORIZED: 'Oturumun sona erdi, tekrar giriş yap.',
+        REFRESH_TOKEN_INVALID: 'Oturum süren doldu.',
+
+        USER_NOT_FOUND: 'Kullanıcı bulunamadı.',
+        PASSWORD_INCORRECT: 'Mevcut şifre hatalı.',
+        PASSWORD_TOO_SHORT: 'Şifre en az 6 karakter olmalı.',
+        PASSWORD_REQUIRED_FOR_OAUTH_USER: 'Sosyal hesap için şifre değiştirilemez.',
+        EMAIL_INVALID: 'Geçerli bir e-posta gir.',
+
+        PLACE_NOT_FOUND: 'Kayıtlı yer bulunamadı.',
+        PLACE_FORBIDDEN: 'Bu yere erişim yetkin yok.',
+        PLACE_NAME_REQUIRED: 'Yer adı boş olamaz.',
+        PLACE_ADDRESS_REQUIRED: 'Adres boş olamaz.',
+        PLACE_COORDS_REQUIRED: 'Konum (enlem/boylam) gerekli.',
+        PLACE_DEFAULT_CONFLICT: 'Aynı anda birden fazla varsayılan ayarlanamaz.',
+
+        ROUTE_NOT_FOUND: 'Rota bulunamadı.',
+        ROUTE_FORBIDDEN: 'Bu rotaya erişim yetkin yok.',
+        STOP_NOT_FOUND: 'Durak bulunamadı.',
+        GEOCODING_FAILED: 'Adres haritada bulunamadı. Lütfen daha açık yaz veya haritadan seç.',
+        OPTIMIZATION_FAILED: 'Rota optimize edilemedi. Tekrar dene.',
+
+        PLAN_LIMIT_EXCEEDED: 'Plan limitini aştın. Yükseltmek için ayarlara bak.',
+
+        INTERNAL_ERROR: 'Beklenmeyen bir hata oluştu. Tekrar dene.',
+
+        // Frontend kaynaklı (backend kodu değil)
+        NETWORK_ERROR: 'Bağlantı hatası. İnternetini kontrol et.',
+        TIMEOUT: 'Sunucu yanıt vermedi. Daha sonra tekrar dene.',
+        UNKNOWN: 'Bir şeyler ters gitti.',
+    },
+
+    notifications: {
+        permission: {
+            askTitle: 'Bildirimleri etkinleştirelim mi?',
+            askMessage: 'Rota güncellemelerini ve teslimat hatırlatmalarını alabilmen için bildirim izni gerekli.',
+            allow: 'İzin Ver',
+            later: 'Şimdi Değil',
+            denied: 'Bildirim izni reddedildi.',
+            deniedHint: 'Sistem ayarlarından izin verebilirsin.',
+            openSettings: 'Ayarları Aç',
+        },
+        sendTest: 'Test Bildirimi Gönder',
+        testSent: 'Test bildirimi gönderildi. Birkaç saniye içinde geleceksin.',
+        unregisterDevice: 'Bu Cihazı Kaldır',
+        eventTypes: {
+            ROUTE_REOPTIMIZED: 'Rota güncellendi',
+            STOP_DELIVERED: 'Durak teslim edildi',
+            STOP_SKIPPED: 'Durak atlandı',
+            STOP_FAILED: 'Durak başarısız',
+        },
     },
 };
 

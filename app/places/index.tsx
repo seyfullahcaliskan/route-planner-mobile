@@ -1,16 +1,19 @@
 // app/places/index.tsx
-import { getMyPlaces, SavedPlaceType } from '@/src/api/placeService';
+import { getMyPlaces, SavedPlaceType, UserSavedPlace } from '@/src/api/placeService';
 import AppCard from '@/src/components/AppCard';
 import PrimaryButton from '@/src/components/PrimaryButton';
 import { useAppTheme } from '@/src/hooks/useAppTheme';
+import { useApiError } from '@/src/hooks/useApiError';
 import { useTranslation } from '@/src/hooks/useTranslation';
 import { radius, spacing, typography } from '@/src/theme';
+import { haptics } from '@/src/utils/haptics';
 import { useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import React from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    Pressable,
     StyleSheet,
     Text,
     View,
@@ -28,12 +31,28 @@ const PLACE_ICON: Record<SavedPlaceType, string> = {
 export default function PlacesScreen() {
     const { colors } = useAppTheme();
     const { t } = useTranslation();
+    const { show: showError } = useApiError();
     const styles = createStyles(colors);
 
-    const { data: places = [], isLoading, refetch, isRefetching } = useQuery({
+    const { data: places = [], isLoading, isError, error, refetch, isRefetching } = useQuery({
         queryKey: ['myPlaces'],
         queryFn: getMyPlaces,
     });
+
+    if (isError) {
+        // Sessizce göstermek yerine retry butonu
+        return (
+            <SafeAreaView style={styles.centered}>
+                <Text style={styles.errorIcon}>⚠️</Text>
+                <Text style={styles.errorTitle}>{t('common.somethingWentWrong')}</Text>
+                <PrimaryButton
+                    title={t('common.retry')}
+                    onPress={() => refetch()}
+                    style={{ marginTop: spacing.md, paddingHorizontal: spacing.xl }}
+                />
+            </SafeAreaView>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -45,7 +64,8 @@ export default function PlacesScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.container} edges={['bottom']}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+            <Stack.Screen options={{ headerShown: false }} />
             <FlatList
                 data={places}
                 keyExtractor={(item) => item.id}
@@ -54,14 +74,34 @@ export default function PlacesScreen() {
                 onRefresh={refetch}
                 ListHeaderComponent={
                     <View style={{ marginBottom: spacing.lg }}>
-                        <Text style={styles.title}>{t('places.title')}</Text>
-                        <Text style={styles.subtitle}>
-                            Sık kullandığın adresleri kaydet, rotada hızlıca seç
-                        </Text>
+                        <View style={styles.headerRow}>
+                            <Pressable
+                                onPress={() => router.back()}
+                                style={styles.backBtn}
+                                hitSlop={12}
+                            >
+                                <Text style={styles.backText}>‹</Text>
+                            </Pressable>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.title}>{t('places.title')}</Text>
+                                <Text style={styles.subtitle}>
+                                    {t('places.subtitle')}
+                                </Text>
+                            </View>
+                        </View>
                     </View>
                 }
                 renderItem={({ item }) => (
-                    <View style={styles.placeCard}>
+                    <Pressable
+                        onPress={() => {
+                            haptics.light();
+                            router.push(`/places/edit/${item.id}`);
+                        }}
+                        style={({ pressed }) => [
+                            styles.placeCard,
+                            pressed && { opacity: 0.7, transform: [{ scale: 0.99 }] },
+                        ]}
+                    >
                         <Text style={styles.placeIcon}>
                             {PLACE_ICON[item.placeType] ?? '📍'}
                         </Text>
@@ -75,21 +115,28 @@ export default function PlacesScreen() {
                             {(item.isDefaultStart || item.isDefaultEnd) && (
                                 <View style={styles.tagRow}>
                                     {item.isDefaultStart && (
-                                        <Text style={styles.tag}>Varsayılan başlangıç</Text>
+                                        <Text style={styles.tag}>
+                                            ▸ {t('places.defaultStart')}
+                                        </Text>
                                     )}
                                     {item.isDefaultEnd && (
-                                        <Text style={styles.tag}>Varsayılan bitiş</Text>
+                                        <Text style={styles.tag}>
+                                            ◂ {t('places.defaultEnd')}
+                                        </Text>
                                     )}
                                 </View>
                             )}
                         </View>
-                    </View>
+                        <Text style={styles.chevron}>›</Text>
+                    </Pressable>
                 )}
                 ListEmptyComponent={
                     <AppCard style={styles.emptyCard}>
                         <Text style={styles.emptyIcon}>📍</Text>
                         <Text style={styles.emptyTitle}>{t('places.emptyTitle')}</Text>
-                        <Text style={styles.emptyDesc}>{t('places.emptySubtitle')}</Text>
+                        <Text style={styles.emptyDesc}>
+                            {t('places.emptySubtitle')}
+                        </Text>
                     </AppCard>
                 }
                 ListFooterComponent={
@@ -113,12 +160,46 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             backgroundColor: colors.page,
             alignItems: 'center',
             justifyContent: 'center',
+            paddingHorizontal: spacing.xl,
         },
-        content: { padding: spacing.lg, paddingBottom: spacing.xxxl },
-        helperText: { ...typography.body, color: colors.textSecondary, marginTop: spacing.md },
+        content: { padding: spacing.lg, paddingBottom: spacing.xxxl ?? 80 },
+        helperText: {
+            ...typography.body,
+            color: colors.textSecondary,
+            marginTop: spacing.md,
+        },
+        errorIcon: { fontSize: 48, marginBottom: spacing.sm },
+        errorTitle: {
+            ...typography.heading,
+            color: colors.text,
+            textAlign: 'center',
+        },
 
-        title: { ...typography.titleLarge, color: colors.text },
-        subtitle: { ...typography.body, color: colors.textSecondary, marginTop: 4 },
+        headerRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+        },
+        backBtn: {
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: colors.cardSoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        backText: {
+            fontSize: 26,
+            color: colors.text,
+            fontWeight: '300',
+            marginTop: -3,
+        },
+        title: { ...typography.titleLarge ?? typography.heading, color: colors.text },
+        subtitle: {
+            ...typography.body,
+            color: colors.textSecondary,
+            marginTop: 4,
+        },
 
         placeCard: {
             flexDirection: 'row',
@@ -142,8 +223,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
             color: colors.textSecondary,
             marginTop: 2,
         },
+        chevron: {
+            fontSize: 26,
+            color: colors.textMuted,
+            fontWeight: '300',
+        },
 
-        tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+        tagRow: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 6,
+            marginTop: 6,
+        },
         tag: {
             ...typography.caption,
             color: colors.primary,
@@ -162,7 +253,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
         emptyTitle: {
             ...typography.heading,
             color: colors.text,
-            marginBottom: spacing.xs,
+            marginBottom: spacing.xs ?? 4,
         },
         emptyDesc: {
             ...typography.bodySmall,
